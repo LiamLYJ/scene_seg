@@ -1,109 +1,88 @@
 import torch
 import torch.nn as nn
+import torchvision
 import torchvision.models as models
 import torch.nn.functional as nn_F
 from nets import encoder_net, decoder_net
 import numpy as np
 import argparse
 from data_loader import texture_seg_dataset
-from utils import seg_loss
+from utils import seg_loss, load_model
 import os
+import cv2
 
 def main(args):
-    total_iter = args.total_iter
     batch_size = args.batch_size
-    loss_weight = args.loss_weight
+    model_dir = args.model_dir
+    save_dir = args.save_dir
+
     if not args.mode is None:
         device = torch.device(args.mode)
     else:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')
+
     data_set = texture_seg_dataset(args.image_dir,
                                 img_size = args.img_size,
                                 segmentation_regions = args.segmentation_regions,
                                 texture_size = args.texture_size,)
-
+    imgs, textures, masks = data_set.feed(batch_size)
 
     model_encoder = encoder_net().to(device)
     model_decoder = decoder_net().to(device)
+
+    model_encoder, model_decoder, iter_old = load_model(model_dir, model_encoder, model_decoder)
+    print ('load model from %d iter'%(iter_old))
+
     filt_adp = nn.AdaptiveAvgPool2d((5,5))
 
-    # loss and optimizer
-    params = list(model_encoder.parameters()) + list(model_decoder.parameters())
-    optimizer = torch.optim.Adam(params, lr=args.learning_rate)
 
-    if args.loss_type == 'seg_loss':
-        criterion = seg_loss(loss_weight)
-    else:
-        criterion = nn.MSELoss()
+    imgs = torch.from_numpy(imgs)
+    textures = torch.from_numpy(textures)
+    masks = torch.from_numpy(masks)
 
-    for iter in range(total_iter):
+    imgs = imgs.type(torch.FloatTensor).to(device)
+    textures = textures.type(torch.FloatTensor).to(device)
+    masks = masks.type(torch.FloatTensor).to(device)
 
-        imgs, textures, masks = data_set.feed(batch_size)
-        imgs = torch.from_numpy(imgs)
-        textures = torch.from_numpy(textures)
-        masks = torch.from_numpy(masks)
+    encoder_img, vgg_features = model_encoder(imgs)
+    encoder_texture, _ = model_encoder(textures)
 
-        imgs = imgs.type(torch.FloatTensor).to(device)
-        textures = textures.type(torch.FloatTensor).to(device)
-        masks = masks.type(torch.FloatTensor).to(device)
+    filt = filt_adp(encoder_texture).to(device)
+    # correlations = nn_F.conv2d(encoder_img, filt, stride = 1, padding = 2)
+    correlations = []
+    for index in range(batch_size):
+        t0 = encoder_img[index].cuda()
+        t1 = filt[index].cuda()
+        correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = 1, padding = 2))
+    correlations = torch.cat(correlations, 0)
+    output_masks, _ = model_decoder(correlations, vgg_features)
+    print ('output_masks: ', output_masks.shape)
+    print ('img shape: ', imgs.shape)
+    print ('masks shape:', masks.shape)
 
-        encoder_img, vgg_features = model_encoder(imgs)
-        encoder_texture, _ = model_encoder(textures)
-
-        filt = filt_adp(encoder_texture).to(device)
-        # correlations = nn_F.conv2d(encoder_img, filt, stride = 1, padding = 2)
-        correlations = []
-        for index in range(batch_size):
-            t0 = encoder_img[index].cuda()
-            t1 = filt[index].cuda()
-            correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = 1, padding = 2))
-        correlations = torch.cat(correlations, 0)
-        output_masks, _ = model_decoder(correlations, vgg_features)
-        print ('output_masks: ', output_masks.shape)
-
-        loss = criterion(output_masks, masks)
-
-        model_decoder.zero_grad()
-        model_encoder.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if iter % args.log_step == 0:
-            print('Iter [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
-              .format(iter, total_iter, loss.item(), np.exp(loss.item())))
-
-        # Save the model checkpoints
-        if (iter+1) % args.save_step == 0:
-            torch.save(model_encoder.state_dict(), os.path.join(
-                args.model_path, 'encoder-{}-{}.ckpt'.format(total_iter, iter)))
-            torch.save(model_decoder.state_dict(), os.path.join(
-                args.model_path, 'decoder-{}-{}.ckpt'.format(total_iter, iter)))
-            print ('model saved once : total_inter: %d, iteration : %d'%(total_iter, iter))
-
+    torchvision.utils.save_image(imgs/ 255.0, os.path.join(save_dir, 'input_img.png'))
+    torchvision.utils.save_image(masks, os.path.join(save_dir, 'gt.png'))
+    torchvision.utils.save_image(output_masks, os.path.join(save_dir, 'output.png'))
+    torchvision.utils.save_image(textures / 255.0, os.path.join(save_dir, 'texture.png'))
 
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, default='./models/' , help='path for saving trained models')
+    parser.add_argument('--model_dir', type=str, default='./models/' , help='path for saving trained models')
     parser.add_argument('--image_dir', type=str, default='./images', help='directory for images from')
-    parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
-    parser.add_argument('--save_step', type=int , default=2, help='step size for saving trained models')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
+    parser.add_argument('--save_dir', type=str, default='./save_results', help='directory for saving ')
 
     # Model parameters
     parser.add_argument('--img_size', type=int , default=256, help='input image size')
     parser.add_argument('--segmentation_regions', type=int , default=3, help='number of segmentation_regions')
     parser.add_argument('--texture_size', type=int , default=64, help='texture input size')
 
-    parser.add_argument('--total_iter', type=int, default=5)
     parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--learning_rate', type=float, default=0.001)
-    parser.add_argument('--loss_weight', type=float, default=1.0)
-    parser.add_argument('--loss_type', type=str, default= 'seg_loss')
 
     args = parser.parse_args()
 
-    if not os.path.exists(args.model_path):
-        os.makedirs(args.model_path)
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
     main(args)

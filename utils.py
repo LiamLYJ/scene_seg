@@ -14,8 +14,8 @@ def save_model(model_dir, iter, model_encoder, model_decoder, inter_size = None)
     if not inter_size is None:
         encoder_ = glob.glob(os.path.join(model_dir, 'encoder*'))
         encoder_ = sorted(encoder_)
-        decoder_ = glob.glob(os.path.join(model_dir, 'encoder*'))
-        decoder_ = sorted(encoder_)
+        decoder_ = glob.glob(os.path.join(model_dir, 'decoder*'))
+        decoder_ = sorted(decoder_)
         assert (len(encoder_) == len(decoder_))
         remove_count = len(encoder_) - inter_size
         for index in range(remove_count):

@@ -16,6 +16,7 @@ def main(args):
     batch_size = args.batch_size
     loss_weight = args.loss_weight
     model_dir = args.model_dir
+    save_size = args.save_inter_size
 
     if not args.mode is None:
         device = torch.device(args.mode)
@@ -34,7 +35,12 @@ def main(args):
     filt_adp = nn.AdaptiveAvgPool2d((5,5))
 
     # load model
-    model_encoder, model_decoder, iter_old = load_model(model_dir, model_encoder, model_decoder)
+    iter_old = 0
+    try:
+        model_encoder, model_decoder, iter_old = load_model(model_dir, model_encoder, model_decoder)
+        print ('load model from %d iteration'%(iter_old))
+    except:
+        print ('start from zero training')
 
     # loss and optimizer
     params = list(model_encoder.parameters()) + list(model_decoder.parameters())
@@ -68,7 +74,7 @@ def main(args):
             correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = 1, padding = 2))
         correlations = torch.cat(correlations, 0)
         output_masks, _ = model_decoder(correlations, vgg_features)
-        print ('output_masks: ', output_masks.shape)
+        # print ('output_masks: ', output_masks.shape)
 
         loss = criterion(output_masks, masks)
 
@@ -89,7 +95,7 @@ def main(args):
 
         # Save the model checkpoints
         if (iter+1) % args.save_step == 0:
-            save_model(model_dir, iter, model_encoder, model_decoder)
+            save_model(model_dir, iter, model_encoder, model_decoder, inter_size = save_size)
             print ('model saved once : total_inter: %d, iteration : %d'%(total_iter, iter))
 
     writer.close()
@@ -102,6 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_dir', type=str, default='./logs/' , help='path for saving tensorboard')
     parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
     parser.add_argument('--save_step', type=int , default=1000, help='step size for saving trained models')
+    parser.add_argument('--save_inter_size', type=int , default=2, help='how many to keep for saving')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
 
     # Model parameters
@@ -117,8 +124,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if not os.path.exists(args.model_path):
-        os.makedirs(args.model_path)
+    if not os.path.exists(args.model_dir):
+        os.makedirs(args.model_dir)
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 

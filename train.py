@@ -6,7 +6,7 @@ from nets import encoder_net, decoder_net
 import numpy as np
 import argparse
 from data_loader import texture_seg_dataset
-from utils import seg_loss, load_model, save_model
+from utils import seg_loss, load_model, save_model, fit_tfb
 import os
 from tensorboardX import SummaryWriter
 
@@ -17,6 +17,8 @@ def main(args):
     loss_weight = args.loss_weight
     model_dir = args.model_dir
     save_size = args.save_inter_size
+    filt_stride = args.filt_stride
+    filt_size = args.filt_size
 
     if not args.mode is None:
         device = torch.device(args.mode)
@@ -28,11 +30,12 @@ def main(args):
     data_set = texture_seg_dataset(args.image_dir,
                                 img_size = args.img_size,
                                 segmentation_regions = args.segmentation_regions,
-                                texture_size = args.texture_size,)
+                                texture_size = args.texture_size,
+                                use_same_from = args.use_same_from)
 
     model_encoder = encoder_net().to(device)
     model_decoder = decoder_net().to(device)
-    filt_adp = nn.AdaptiveAvgPool2d((5,5))
+    filt_adp = nn.AdaptiveAvgPool2d((filt_size,filt_size))
 
     # load model
     iter_old = 0
@@ -65,13 +68,20 @@ def main(args):
         encoder_img, vgg_features = model_encoder(imgs)
         encoder_texture, _ = model_encoder(textures)
 
-        filt = filt_adp(encoder_texture).to(device)
+        # print ('encoder_texture: ', encoder_texture.shape)
+        # filt = filt_adp(encoder_texture).to(device)
+        filt = encoder_texture.to(device)
+        print ('filt :', filt.shape)
+
         # correlations = nn_F.conv2d(encoder_img, filt, stride = 1, padding = 2)
         correlations = []
         for index in range(batch_size):
             t0 = encoder_img[index].cuda()
             t1 = filt[index].cuda()
-            correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = 1, padding = 2))
+            padding = (filt_stride - 1) * t0.shape[-1] - filt_stride + filt.shape[-1]
+            padding = int(padding / 2)
+            # print ('padding: ', padding)
+            correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = filt_stride, padding = padding))
         correlations = torch.cat(correlations, 0)
         output_masks, _ = model_decoder(correlations, vgg_features)
         # print ('output_masks: ', output_masks.shape)
@@ -88,8 +98,8 @@ def main(args):
               .format(iter, total_iter, loss.item(), np.exp(loss.item())))
             writer.add_scalar('loss',loss.item(), iter)
             # just choose one
-            writer.add_image('input', imgs[0], iter)
-            writer.add_image('texture', textures[0], iter)
+            writer.add_image('input', fit_tfb(imgs[0]), iter)
+            writer.add_image('texture', fit_tfb(textures[0]), iter)
             writer.add_image('mask', masks[0], iter)
             writer.add_image('output', output_masks[0], iter)
 
@@ -104,23 +114,26 @@ if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', type=str, default='./models/' , help='path for saving trained models')
-    parser.add_argument('--image_dir', type=str, default='./images', help='directory for images from')
+    parser.add_argument('--image_dir', type=str, default='./dataset/dtd/images', help='directory for images from')
     parser.add_argument('--log_dir', type=str, default='./logs/' , help='path for saving tensorboard')
     parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
     parser.add_argument('--save_step', type=int , default=1000, help='step size for saving trained models')
     parser.add_argument('--save_inter_size', type=int , default=2, help='how many to keep for saving')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
+    parser.add_argument('--use_same_from', type=bool, default=True, help = 'if use the same texture from that same')
 
     # Model parameters
     parser.add_argument('--img_size', type=int , default=256, help='input image size')
     parser.add_argument('--segmentation_regions', type=int , default=3, help='number of segmentation_regions')
     parser.add_argument('--texture_size', type=int , default=64, help='texture input size')
+    parser.add_argument('--filt_stride', type=int , default=2, help='convolution stride of textural filt')
+    parser.add_argument('--filt_size', type=int , default=64, help='convolution filt size of textural filt')
 
     parser.add_argument('--total_iter', type=int, default=9999999)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--loss_weight', type=float, default=1.0)
-    parser.add_argument('--loss_type', type=str, default= 'seg_loss')
+    parser.add_argument('--loss_type', type=str, default= 'seg_loss', help='seg_loss or rms_loss')
 
     args = parser.parse_args()
 

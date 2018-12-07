@@ -6,6 +6,11 @@ import glob
 import os
 import re
 
+
+def fit_tfb(img):
+    # img supoose to have shape of [3,h,w]
+    return img[[2,1,0], :, :]
+
 def save_model(model_dir, iter, model_encoder, model_decoder, inter_size = None):
     torch.save(model_encoder.state_dict(), os.path.join(
         model_dir, 'encoder_%08d.ckpt'%(iter)))

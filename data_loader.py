@@ -13,13 +13,16 @@ import random
 
 class texture_seg_dataset(object):
     def __init__(self, data_path, img_size, segmentation_regions, texture_size,
-                        shuffle = True, use_same_from = True):
+                        shuffle = True, use_same_from = True,
+                        mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]): # from torch normalize
         self.shuffle = shuffle
         self.img_size = img_size
         self.segmentation_regions = segmentation_regions
         self.texture_size = texture_size
         self.folders = glob.glob(os.path.join(data_path, '*/'))
         self.use_same_from = use_same_from
+        self.mean = mean
+        self.std = std
         # num_seg must be smaller than scene_num
         assert (len(self.folders) >= self.segmentation_regions)
 
@@ -62,7 +65,9 @@ class texture_seg_dataset(object):
             files = glob.glob(os.path.join(folder, format))
             file_cur = random.choice(files)
             # print (file_cur)
-            img_cur = np.asarray(Image.open(file_cur))
+            img_cur = Image.open(file_cur)
+            img_cur = img_cur.resize([self.img_size, self.img_size])
+            img_cur = (np.asarray(img_cur) / 255.0 - self.mean) / self.std
             img[mask[..., index] == 1] = img_cur[mask[..., index] == 1]
             if self.use_same_from:
                 texture_cur = img_cur
@@ -102,7 +107,7 @@ class texture_seg_dataset(object):
             return imgs, textures, masks
 
 if __name__ == '__main__':
-    data_set = texture_seg_dataset('./images', img_size = 256, segmentation_regions= 3, texture_size = 64)
+    data_set = texture_seg_dataset('./dataset/dtd/images', img_size = 256, segmentation_regions= 3, texture_size = 64)
     imgs, textures, masks = data_set.feed(batch_size = 2)
     print ('img shape: ', imgs.shape)
     print ('texture shape: ', textures.shape )

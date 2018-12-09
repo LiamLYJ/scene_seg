@@ -84,14 +84,27 @@ class texture_seg_dataset(object):
             return self.get_data()
         else:
             img_texture_mask = []
-            for _ in range(batch_size // self.segmentation_regions + 1):
+            # add alls in one img iput
+            # for _ in range(batch_size // self.segmentation_regions + 1):
+            #     img, texture_mask = self.get_data()
+            #     for index in range(self.segmentation_regions):
+            #         patch = {}
+            #         patch['img'] = img
+            #         patch['texture'] = texture_mask[index]['texture']
+            #         patch['mask'] = texture_mask[index]['mask']
+            #         img_texture_mask.append(patch)
+
+            # add each one separatly
+            for _ in range(batch_size):
                 img, texture_mask = self.get_data()
-                for index in range(self.segmentation_regions):
-                    patch = {}
-                    patch['img'] = img
-                    patch['texture'] = texture_mask[index]['texture']
-                    patch['mask'] = texture_mask[index]['mask']
-                    img_texture_mask.append(patch)
+                # random choice one from cluster
+                index = np.random.choice(self.segmentation_regions, 1)[0]
+                patch = {}
+                patch['img'] = img
+                patch['texture'] = texture_mask[index]['texture']
+                patch['mask'] = texture_mask[index]['mask']
+                img_texture_mask.append(patch)
+
             img_texture_mask = img_texture_mask[:batch_size]
             if self.shuffle:
                 random.shuffle(img_texture_mask)

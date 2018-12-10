@@ -6,6 +6,21 @@ import glob
 import os
 import re
 
+def normal_masks(input):
+    # input shape: b*1 *h*w
+    b,_,h,w = input.size()
+    input = input.view(b, -1)
+    b_min = torch.min(input, 0)[0]
+    b_max = torch.max(input, 0)[0]
+    input = (input - b_min) / (b_max - b_min)
+    return input.view(b, 1, h, w)
+
+def remap2normal(img, mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]):
+    # img is b*3*h*w
+    batch_size = img.shape[0]
+    batch_mean = torch.Tensor(mean).repeat(batch_size).view(-1, 3, 1, 1)
+    batch_std = torch.Tensor(std).repeat(batch_size).view(-1, 3, 1, 1)
+    return img * batch_std + batch_mean
 
 def fit_tfb(img):
     # img supoose to have shape of [3,h,w]

@@ -10,9 +10,11 @@ def normal_masks(input):
     # input shape: b*1 *h*w
     b,_,h,w = input.size()
     input = input.view(b, -1)
-    b_min = torch.min(input, 0)[0]
-    b_max = torch.max(input, 0)[0]
+    b_min = torch.min(input, 1)[0]
+    b_max = torch.max(input, 1)[0]
+    input = torch.transpose(input, 0, 1)
     input = (input - b_min) / (b_max - b_min)
+    input = torch.transpose(input, 0, 1)
     return input.view(b, 1, h, w)
 
 def remap2normal(img, mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]):
@@ -50,6 +52,8 @@ def load_model(model_dir, model_encoder, model_decoder):
     decoder_ = sorted(decoder_found)[-1]
     iter_old = re.findall('\d+', encoder_)[0]
     assert (iter_old == re.findall('\d+', decoder_)[0])
+    model_encoder.load_state_dict(torch.load(encoder_))
+    model_decoder.load_state_dict(torch.load(decoder_))
     return model_encoder, model_decoder, int(iter_old)
 
 def get_weighted(y):

@@ -79,14 +79,14 @@ def main(args):
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='./models/' , help='path for saving trained models')
-    parser.add_argument('--image_dir', type=str, default='./dataset/scene_images/', help='directory for images from')
+    parser.add_argument('--model_dir', type=str, default='./models/scene_model' , help='path for saving trained models')
+    parser.add_argument('--image_dir', type=str, default='./dataset/scene_images', help='directory for images from')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
     parser.add_argument('--use_same_from', type=bool, default=True, help = 'if use the same texture from that same')
     parser.add_argument('--save_dir', type=str, default='./save_results', help='directory for saving ')
 
     parser.add_argument('--filt_stride', type=int , default=1, help='convolution stride of textural filt')
-    parser.add_argument('--filt_size', type=int , default=11, help='convolution filt size of textural filt')
+    parser.add_argument('--filt_size', type=int , default=5, help='convolution filt size of textural filt')
 
     # Model parameters
     parser.add_argument('--img_size', type=int , default=256, help='input image size')

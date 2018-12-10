@@ -114,9 +114,9 @@ def main(args):
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='./models/' , help='path for saving trained models')
+    parser.add_argument('--model_dir', type=str, default='./models/scene_model' , help='path for saving trained models')
     parser.add_argument('--image_dir', type=str, default='./dataset/scene_images', help='directory for images from')
-    parser.add_argument('--log_dir', type=str, default='./logs/' , help='path for saving tensorboard')
+    parser.add_argument('--log_dir', type=str, default='./logs/scene/' , help='path for saving tensorboard')
     parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
     parser.add_argument('--save_step', type=int , default=1000, help='step size for saving trained models')
     parser.add_argument('--save_inter_size', type=int , default=2, help='how many to keep for saving')
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--segmentation_regions', type=int , default=3, help='number of segmentation_regions')
     parser.add_argument('--texture_size', type=int , default=64, help='texture input size')
     parser.add_argument('--filt_stride', type=int , default=1, help='convolution stride of textural filt')
-    parser.add_argument('--filt_size', type=int , default=11, help='convolution filt size of textural filt')
+    parser.add_argument('--filt_size', type=int , default=5, help='convolution filt size of textural filt')
 
     parser.add_argument('--total_iter', type=int, default=9999999)
     parser.add_argument('--batch_size', type=int, default=8)

@@ -22,7 +22,7 @@ python test.py
 
 ![input image](./real_test/input_img_00.png)
 ![input texture](./real_test/texture_02.png)
-![output mask](./save_dtd/output_02.png)
+![output mask](./real_test/output_02.png)
 
 ![input image](./save_dtd/input_img_01.png)
 ![input texture](./save_dtd/texture_01.png)

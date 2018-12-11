@@ -6,7 +6,7 @@ import torch.nn.functional as nn_F
 from nets import encoder_net, decoder_net
 import numpy as np
 import argparse
-from data_loader import texture_seg_dataset
+from data_loader import texture_seg_dataset, get_data_direct
 from utils import seg_loss, load_model, remap2normal, normal_masks
 import os
 import cv2
@@ -71,7 +71,63 @@ def main(args):
     for index in range(batch_size):
         torchvision.utils.save_image(imgs[index], os.path.join(save_dir, 'input_img_%02d.png'%(index)))
         torchvision.utils.save_image(masks[index], os.path.join(save_dir, 'gt_%02d.png'%(index)))
-        # torchvision.utils.save_image(output_masks[index] * 255.0, os.path.join(save_dir, 'output_%02d.png'%(index)))
+        torchvision.utils.save_image(output_masks[index], os.path.join(save_dir, 'output_%02d.png'%(index)))
+        torchvision.utils.save_image(textures[index], os.path.join(save_dir, 'texture_%02d.png'%(index)))
+
+
+def load_direct(args):
+    model_dir = args.model_dir
+    save_dir = args.save_dir
+    filt_stride = args.filt_stride
+    filt_size = args.filt_size
+
+    if not args.mode is None:
+        device = torch.device(args.mode)
+    else:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
+
+    # imgs, textures = get_data_direct(args.img_size, args.texture_size, imgs_fn = args.imgs_fn, textures_fn = args.textures_fn, )
+    imgs, textures = get_data_direct(args.img_size, args.texture_size, sample_dir = args.sample_dir )
+    batch_size = imgs.shape[0]
+
+    model_encoder = encoder_net().to(device)
+    model_decoder = decoder_net().to(device)
+    filt_adp = nn.AdaptiveAvgPool2d((filt_size,filt_size))
+
+    model_encoder, model_decoder, iter_old = load_model(model_dir, model_encoder, model_decoder)
+    print ('load model from %d iter'%(iter_old))
+
+    imgs = torch.from_numpy(imgs)
+    textures = torch.from_numpy(textures)
+
+    imgs = imgs.type(torch.FloatTensor).to(device)
+    textures = textures.type(torch.FloatTensor).to(device)
+
+    encoder_img, vgg_features = model_encoder(imgs)
+    encoder_texture, _ = model_encoder(textures)
+
+    filt = filt_adp(encoder_texture).to(device)
+
+    correlations = []
+
+    for index in range(batch_size):
+        t0 = encoder_img[index].cuda()
+        t1 = filt[index].cuda()
+        padding = (filt_stride - 1) * t0.shape[-1] - filt_stride + filt.shape[-1]
+        padding = int(padding / 2)
+        correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = filt_stride, padding = padding))
+    correlations = torch.cat(correlations, 0)
+    output_masks, _ = model_decoder(correlations, vgg_features)
+    print ('output_masks: ', output_masks.shape)
+    print ('img shape: ', imgs.shape)
+
+    imgs = remap2normal(imgs.cpu())
+    textures = remap2normal(textures.cpu())
+    output_masks = normal_masks(output_masks.cpu())
+
+    for index in range(batch_size):
+        torchvision.utils.save_image(imgs[index], os.path.join(save_dir, 'input_img_%02d.png'%(index)))
         torchvision.utils.save_image(output_masks[index], os.path.join(save_dir, 'output_%02d.png'%(index)))
         torchvision.utils.save_image(textures[index], os.path.join(save_dir, 'texture_%02d.png'%(index)))
 
@@ -79,11 +135,13 @@ def main(args):
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='./models/scene_model' , help='path for saving trained models')
-    parser.add_argument('--image_dir', type=str, default='./dataset/scene_images', help='directory for images from')
+    parser.add_argument('--model_dir', type=str, default='./models/dtd_model' , help='path for saving trained models')
+    parser.add_argument('--image_dir', type=str, default='./dataset/dtd/images', help='directory for images from')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
     parser.add_argument('--use_same_from', type=bool, default=True, help = 'if use the same texture from that same')
-    parser.add_argument('--save_dir', type=str, default='./save_results', help='directory for saving ')
+    parser.add_argument('--save_dir', type=str, default='./save_dtd', help='directory for saving ')
+    # parser.add_argument('--save_dir', type=str, default='./save_scene', help='directory for saving ')
+    # parser.add_argument('--save_dir', type=str, default='./real_test', help='directory for saving ')
 
     parser.add_argument('--filt_stride', type=int , default=1, help='convolution stride of textural filt')
     parser.add_argument('--filt_size', type=int , default=5, help='convolution filt size of textural filt')
@@ -95,8 +153,14 @@ if __name__ == '__main__':
 
     parser.add_argument('--batch_size', type=int, default=5)
 
+    parser.add_argument('--imgs_fn', type=str, default='./sample_imgs/img_0.png' , help='input images, seperate by :')
+    parser.add_argument('--textures_fn', type=str, default='./sample_imgs/texture_0.png' , help='input textures, sepeeate by :')
+
+    parser.add_argument('--sample_dir', type=str, default='./sample_imgs', help='directory for images from')
+
     args = parser.parse_args()
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
     main(args)
+    # load_direct(args)

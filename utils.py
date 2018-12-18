@@ -28,6 +28,7 @@ def fit_tfb(img):
     # img supoose to have shape of [3,h,w]
     return img[[2,1,0], :, :]
 
+# load / save model of encoder and decoder
 def save_model(model_dir, iter, model_encoder, model_decoder, inter_size = None):
     torch.save(model_encoder.state_dict(), os.path.join(
         model_dir, 'encoder_%08d.ckpt'%(iter)))
@@ -45,6 +46,7 @@ def save_model(model_dir, iter, model_encoder, model_decoder, inter_size = None)
             os.remove(decoder_[index])
         print ('remove some saved models once ')
 
+
 def load_model(model_dir, model_encoder, model_decoder):
     encoder_found = glob.glob(os.path.join(model_dir, 'encoder*'))
     decoder_found = glob.glob(os.path.join(model_dir, 'decoder*'))
@@ -55,6 +57,26 @@ def load_model(model_dir, model_encoder, model_decoder):
     model_encoder.load_state_dict(torch.load(encoder_))
     model_decoder.load_state_dict(torch.load(decoder_))
     return model_encoder, model_decoder, int(iter_old)
+
+
+# load / save model of fcn
+def save_fcn_model(model_dir, iter, fcn_model, inter_size = None):
+    torch.save(fcn_model.state_dict(), os.path.join(
+        model_dir, 'fcn_%08d.ckpt'%(iter)))
+    if not inter_size is None:
+        model_ = glob.glob(os.path.join(model_dir, 'fcn*'))
+        model_ = sorted(model_)
+        remove_count = len(model_) - inter_size
+        for index in range(remove_count):
+            os.remove(model_[index])
+        print ('remove some saved models once ')
+
+def load_fcn_model(model_dir, fcn_model,):
+    model_found = glob.glob(os.path.join(model_dir, 'fcn*'))
+    model_ = sorted(model_found)[-1]
+    iter_old = re.findall('\d+', model_)[0]
+    fcn_model.load_state_dict(torch.load(model_))
+    return fcn_model, int(iter_old)
 
 def get_weighted(y):
     data_ori = y.cpu().data.numpy()

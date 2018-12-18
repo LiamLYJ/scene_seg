@@ -135,13 +135,13 @@ def load_direct(args):
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='./models/dtd_model' , help='path for saving trained models')
+    parser.add_argument('--model_dir', type=str, default='./models/scene_model' , help='path for saving trained models')
     parser.add_argument('--image_dir', type=str, default='./dataset/dtd/images', help='directory for images from')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
     parser.add_argument('--use_same_from', type=bool, default=True, help = 'if use the same texture from that same')
-    parser.add_argument('--save_dir', type=str, default='./save_dtd', help='directory for saving ')
+    # parser.add_argument('--save_dir', type=str, default='./save_dtd', help='directory for saving ')
     # parser.add_argument('--save_dir', type=str, default='./save_scene', help='directory for saving ')
-    # parser.add_argument('--save_dir', type=str, default='./real_test', help='directory for saving ')
+    parser.add_argument('--save_dir', type=str, default='./real_test', help='directory for saving ')
 
     parser.add_argument('--filt_stride', type=int , default=1, help='convolution stride of textural filt')
     parser.add_argument('--filt_size', type=int , default=5, help='convolution filt size of textural filt')
@@ -162,5 +162,5 @@ if __name__ == '__main__':
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
-    main(args)
-    # load_direct(args)
+    # main(args)
+    load_direct(args)

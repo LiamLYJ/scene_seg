@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as nn_F
-from nets import encoder_net, decoder_net
+from fcn_net import *
 import numpy as np
 import argparse
-from data_loader import texture_seg_dataset
-from utils import seg_loss, load_model, save_model, fit_tfb
+from data_loader import fcn_dataset
+from utils import load_fcn_model, save_fcn_model, fit_tfb, seg_loss
 import os
 from tensorboardX import SummaryWriter
 
@@ -17,8 +17,7 @@ def main(args):
     loss_weight = args.loss_weight
     model_dir = args.model_dir
     save_size = args.save_inter_size
-    filt_stride = args.filt_stride
-    filt_size = args.filt_size
+    n_class = args.segmentation_regions
 
     if not args.mode is None:
         device = torch.device(args.mode)
@@ -27,26 +26,21 @@ def main(args):
     # device = torch.device('cpu')
     writer = SummaryWriter(args.log_dir)
 
-    data_set = texture_seg_dataset(args.image_dir,
-                                img_size = args.img_size,
-                                segmentation_regions = args.segmentation_regions,
-                                texture_size = args.texture_size,
-                                use_same_from = args.use_same_from)
+    data_set = fcn_dataset('./dataset/scene_images', img_size = 256, segmentation_regions= 4,)
 
-    model_encoder = encoder_net().to(device)
-    model_decoder = decoder_net().to(device)
-    filt_adp = nn.AdaptiveAvgPool2d((filt_size,filt_size))
+    vgg_model = VGGNet(requires_grad=True).to(device)
+    fcn_model = FCNs(pretrained_net=vgg_model, n_class=n_class).to(device)
 
     # load model
     iter_old = 0
     try:
-        model_encoder, model_decoder, iter_old = load_model(model_dir, model_encoder, model_decoder)
+        fcn_model, iter_old = load_fcn_model(model_dir, model_encoder, model_decoder)
         print ('load model from %d iteration'%(iter_old))
     except:
         print ('start from zero training')
 
     # loss and optimizer
-    params = list(model_encoder.parameters()) + list(model_decoder.parameters())
+    params = list(fcn_model.parameters())
     optimizer = torch.optim.Adam(params, lr=args.learning_rate)
 
     if args.loss_type == 'seg_loss':
@@ -56,41 +50,18 @@ def main(args):
 
     for iter in range(iter_old + 1, total_iter):
 
-        imgs, textures, masks = data_set.feed(batch_size)
+        imgs, masks = data_set.feed(batch_size)
         imgs = torch.from_numpy(imgs)
-        textures = torch.from_numpy(textures)
         masks = torch.from_numpy(masks)
 
         imgs = imgs.type(torch.FloatTensor).to(device)
-        textures = textures.type(torch.FloatTensor).to(device)
         masks = masks.type(torch.FloatTensor).to(device)
 
-        encoder_img, vgg_features = model_encoder(imgs)
-        encoder_texture, _ = model_encoder(textures)
-
-        # print ('endoder_img :', encoder_img.shape)
-        # print ('encoder_texture: ', encoder_texture.shape)
-        filt = filt_adp(encoder_texture).to(device)
-        # filt = encoder_texture.to(device)
-        # print ('filt :', filt.shape)
-
-        # correlations = nn_F.conv2d(encoder_img, filt, stride = 1, padding = 2)
-        correlations = []
-        for index in range(batch_size):
-            t0 = encoder_img[index].cuda()
-            t1 = filt[index].cuda()
-            padding = (filt_stride - 1) * t0.shape[-1] - filt_stride + filt.shape[-1]
-            padding = int(padding / 2)
-            # print ('padding: ', padding)
-            correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = filt_stride, padding = padding))
-        correlations = torch.cat(correlations, 0)
-        output_masks, _ = model_decoder(correlations, vgg_features)
-        # print ('output_masks: ', output_masks.shape)
+        output_masks = fcn_model(imgs).to(device)
 
         loss = criterion(output_masks, masks)
 
-        model_decoder.zero_grad()
-        model_encoder.zero_grad()
+        fcn_model.zero_grad()
         loss.backward()
         optimizer.step()
 
@@ -98,15 +69,15 @@ def main(args):
             print('Iter [{}/{}], Loss: {:.4f}, Perplexity: {:5.4f}'
               .format(iter, total_iter, loss.item(), np.exp(loss.item())))
             writer.add_scalar('loss',loss.item(), iter)
-            # just choose one
+            # just choose one from batch
             writer.add_image('input', fit_tfb(imgs[0]), iter)
-            writer.add_image('texture', fit_tfb(textures[0]), iter)
-            writer.add_image('mask', masks[0], iter)
-            writer.add_image('output', output_masks[0], iter)
+            for index_class in range(n_class):
+                writer.add_image('mask_%d'%(index_class), masks[0][index_class], iter)
+                writer.add_image('output_%d'%(index_class), output_masks[0][index_class], iter)
 
         # Save the model checkpoints
         if (iter+1) % args.save_step == 0:
-            save_model(model_dir, iter, model_encoder, model_decoder, inter_size = save_size)
+            save_fcn_model(model_dir, iter, fcn_model, inter_size = save_size)
             print ('model saved once : total_inter: %d, iteration : %d'%(total_iter, iter))
 
     writer.close()
@@ -114,21 +85,17 @@ def main(args):
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='./models/scene_model' , help='path for saving trained models')
+    parser.add_argument('--model_dir', type=str, default='./models/fcn_scene_model' , help='path for saving trained models')
     parser.add_argument('--image_dir', type=str, default='./dataset/scene_images', help='directory for images from')
-    parser.add_argument('--log_dir', type=str, default='./logs/scene/' , help='path for saving tensorboard')
+    parser.add_argument('--log_dir', type=str, default='./logs/fcn_scene/' , help='path for saving tensorboard')
     parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
-    parser.add_argument('--save_step', type=int , default=1000, help='step size for saving trained models')
+    parser.add_argument('--save_step', type=int , default=2, help='step size for saving trained models')
     parser.add_argument('--save_inter_size', type=int , default=2, help='how many to keep for saving')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
-    parser.add_argument('--use_same_from', type=bool, default=True, help = 'if use the same texture from that same')
 
     # Model parameters
     parser.add_argument('--img_size', type=int , default=256, help='input image size')
-    parser.add_argument('--segmentation_regions', type=int , default=3, help='number of segmentation_regions')
-    parser.add_argument('--texture_size', type=int , default=64, help='texture input size')
-    parser.add_argument('--filt_stride', type=int , default=1, help='convolution stride of textural filt')
-    parser.add_argument('--filt_size', type=int , default=5, help='convolution filt size of textural filt')
+    parser.add_argument('--segmentation_regions', type=int , default=4, help='number of segmentation_regions')
 
     parser.add_argument('--total_iter', type=int, default=9999999)
     parser.add_argument('--batch_size', type=int, default=8)

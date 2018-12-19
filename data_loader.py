@@ -11,47 +11,94 @@ import cv2
 import glob
 import random
 
+# depracated
+# def get_data_direct(img_size, texture_size,
+#                     imgs_fn = None, textures_fn = None, sample_dir = None, sep = ':', format = '*.png',
+#                     mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]):
+#     if sample_dir is None:
+#         imgs_fn = imgs_fn.split(sep)
+#         textures_fn = textures_fn.split(sep)
+#     else:
+#         all_images = glob.glob(os.path.join(sample_dir, format))
+#         all_images = sorted(all_images)
+#         imgs_fn = []
+#         textures_fn = []
+#         for file in all_images:
+#             if 'img' in file.split('/')[-1]:
+#                 imgs_fn.append(file)
+#             elif 'texture' in file.split('/')[-1]:
+#                 textures_fn.append(file)
+#             else:
+#                 raise ValueError('not sure which type if this one: %s'%(file))
+#     batch_size = len(imgs_fn)
+#     assert len(imgs_fn) == len(textures_fn)
+#     imgs = []
+#     textures = []
+#     for index in range(batch_size):
+#         img_cur = Image.open(imgs_fn[index])
+#         img_cur = img_cur.resize([img_size, img_size])
+#         # it could be rgba
+#         img_cur = (np.asarray(img_cur)[...,:3] / 255.0 - mean) / std
+#         imgs.append(img_cur)
+#
+#         texture_cur = Image.open(textures_fn[index])
+#         texture_cur = texture_cur.resize([texture_size, texture_size])
+#         # it could be rgba
+#         texture_cur = (np.asarray(texture_cur)[...,:3] / 255.0 - mean) / std
+#         textures.append(texture_cur)
+#
+#     imgs = np.array(imgs).reshape([batch_size, img_size, img_size, 3])
+#     textures = np.array(textures).reshape([batch_size, texture_size, texture_size, 3])
+#     imgs = np.transpose(imgs, [0, 3, 1, 2])
+#     textures = np.transpose(textures, [0, 3, 1, 2])
+#     return imgs, textures
+#
 
-def get_data_direct(img_size, texture_size,
-                    imgs_fn = None, textures_fn = None, sample_dir = None, sep = ':', format = '*.png',
+
+def get_data_direct(img_size, imgs_dir, texture_size = None, textures_dir = None,
+                    format = '*.png',
                     mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]):
-    if sample_dir is None:
-        imgs_fn = imgs_fn.split(sep)
-        textures_fn = textures_fn.split(sep)
+    imgs = glob.glob(os.path.join(imgs_dir, format))
+    imgs = sorted(imgs)
+    if textures_dir is not None:
+        textures = glob.glob(os.path.join(textures_dir, format))
+        textures = sorted(textures)
+
+    batch_size = len(imgs) * len(textures) if textures_dir is not None else len(imgs)
+    imgs_data = []
+    textures_data = []
+    if textures_dir is not None:
+        assert texture_size is not None
+        for img_index in range(len(imgs)):
+            for texture_index in range(len(textures)):
+                img_cur = Image.open(imgs[img_index])
+                img_cur = img_cur.resize([img_size, img_size])
+                # it could be rgba
+                img_cur = (np.asarray(img_cur)[...,:3] / 255.0 - mean) / std
+                imgs_data.append(img_cur)
+
+                texture_cur = Image.open(textures[texture_index])
+                texture_cur = texture_cur.resize([texture_size, texture_size])
+                # it could be rgba
+                texture_cur = (np.asarray(texture_cur)[...,:3] / 255.0 - mean) / std
+                textures_data.append(texture_cur)
     else:
-        all_images = glob.glob(os.path.join(sample_dir, format))
-        all_images = sorted(all_images)
-        imgs_fn = []
-        textures_fn = []
-        for file in all_images:
-            if 'img' in file.split('/')[-1]:
-                imgs_fn.append(file)
-            elif 'texture' in file.split('/')[-1]:
-                textures_fn.append(file)
-            else:
-                raise ValueError('not sure which type if this one: %s'%(file))
-    batch_size = len(imgs_fn)
-    assert len(imgs_fn) == len(textures_fn)
-    imgs = []
-    textures = []
-    for index in range(batch_size):
-        img_cur = Image.open(imgs_fn[index])
-        img_cur = img_cur.resize([img_size, img_size])
-        # it could be rgba
-        img_cur = (np.asarray(img_cur)[...,:3] / 255.0 - mean) / std
-        imgs.append(img_cur)
+        for img_index in range(len(imgs)):
+            img_cur = Image.open(imgs[img_index])
+            img_cur = img_cur.resize([img_size, img_size])
+            # it could be rgba
+            img_cur = (np.asarray(img_cur)[...,:3] / 255.0 - mean) / std
+            imgs_data.append(img_cur)
 
-        texture_cur = Image.open(textures_fn[index])
-        texture_cur = texture_cur.resize([texture_size, texture_size])
-        # it could be rgba
-        texture_cur = (np.asarray(texture_cur)[...,:3] / 255.0 - mean) / std
-        textures.append(texture_cur)
+    imgs_data = np.array(imgs_data).reshape([batch_size, img_size, img_size, 3])
+    imgs_data = np.transpose(imgs_data, [0, 3, 1, 2])
 
-    imgs = np.array(imgs).reshape([batch_size, img_size, img_size, 3])
-    textures = np.array(textures).reshape([batch_size, texture_size, texture_size, 3])
-    imgs = np.transpose(imgs, [0, 3, 1, 2])
-    textures = np.transpose(textures, [0, 3, 1, 2])
-    return imgs, textures
+    if textures_dir is not None:
+        textures_data = np.array(textures_data).reshape([batch_size, texture_size, texture_size, 3])
+        textures_data = np.transpose(textures_data, [0, 3, 1, 2])
+    return imgs_data, textures_data
+
+
 
 class texture_seg_dataset(object):
     def __init__(self, data_path, img_size, segmentation_regions, texture_size,

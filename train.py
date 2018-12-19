@@ -89,7 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_dir', type=str, default='./dataset/scene_images', help='directory for images from')
     parser.add_argument('--log_dir', type=str, default='./logs/fcn_scene/' , help='path for saving tensorboard')
     parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
-    parser.add_argument('--save_step', type=int , default=2, help='step size for saving trained models')
+    parser.add_argument('--save_step', type=int , default=1000, help='step size for saving trained models')
     parser.add_argument('--save_inter_size', type=int , default=2, help='how many to keep for saving')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
 
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     parser.add_argument('--segmentation_regions', type=int , default=4, help='number of segmentation_regions')
 
     parser.add_argument('--total_iter', type=int, default=9999999)
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--loss_weight', type=float, default=1.0)
     parser.add_argument('--loss_type', type=str, default= 'seg_loss', help='seg_loss or rms_loss')

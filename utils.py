@@ -15,7 +15,7 @@ def normal_masks(input):
     input = torch.transpose(input, 0, 1)
     input = (input - b_min) / (b_max - b_min)
     input = torch.transpose(input, 0, 1)
-    return input.view(b, 1, h, w)
+    return input.view(b, -1, h, w)
 
 def remap2normal(img, mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]):
     # img is b*3*h*w

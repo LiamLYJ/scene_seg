@@ -34,7 +34,7 @@ def main(args):
     # load model
     iter_old = 0
     try:
-        fcn_model, iter_old = load_fcn_model(model_dir, model_encoder, model_decoder)
+        fcn_model, iter_old = load_fcn_model(model_dir, fcn_model)
         print ('load model from %d iteration'%(iter_old))
     except:
         print ('start from zero training')

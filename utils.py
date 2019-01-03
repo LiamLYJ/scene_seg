@@ -59,24 +59,24 @@ def load_model(model_dir, model_encoder, model_decoder):
     return model_encoder, model_decoder, int(iter_old)
 
 
-# load / save model of fcn
-def save_fcn_model(model_dir, iter, fcn_model, inter_size = None):
-    torch.save(fcn_model.state_dict(), os.path.join(
-        model_dir, 'fcn_%08d.ckpt'%(iter)))
+# load / save model of prefix
+def save_model_prefix(model_dir, iter, model, prefix = 'fcn', inter_size = None):
+    torch.save(model.state_dict(), os.path.join(
+        model_dir, '%s_%08d.ckpt'%(prefix, iter)))
     if not inter_size is None:
-        model_ = glob.glob(os.path.join(model_dir, 'fcn*'))
+        model_ = glob.glob(os.path.join(model_dir, prefix+'*'))
         model_ = sorted(model_)
         remove_count = len(model_) - inter_size
         for index in range(remove_count):
             os.remove(model_[index])
         print ('remove some saved models once ')
 
-def load_fcn_model(model_dir, fcn_model,):
-    model_found = glob.glob(os.path.join(model_dir, 'fcn*'))
+def load_model_prefix(model_dir, model, prefix = 'fcn'):
+    model_found = glob.glob(os.path.join(model_dir, prefix+'*'))
     model_ = sorted(model_found)[-1]
     iter_old = re.findall('\d+', model_)[0]
-    fcn_model.load_state_dict(torch.load(model_))
-    return fcn_model, int(iter_old)
+    model.load_state_dict(torch.load(model_))
+    return model, int(iter_old)
 
 def get_weighted(y):
     data_ori = y.cpu().data.numpy()

@@ -87,7 +87,8 @@ def get_data_direct(img_size, imgs_dir, texture_size = None, textures_dir = None
             img_cur = Image.open(imgs[img_index])
             img_cur = img_cur.resize([img_size, img_size])
             # it could be rgba
-            img_cur = (np.asarray(img_cur)[...,:3] / 255.0 - mean) / std
+            # img_cur = (np.asarray(img_cur)[...,:3] / 255.0 - mean) / std
+            img_cur = np.asarray(img_cur)
             imgs_data.append(img_cur)
 
     imgs_data = np.array(imgs_data).reshape([batch_size, img_size, img_size, 3])
@@ -100,7 +101,7 @@ def get_data_direct(img_size, imgs_dir, texture_size = None, textures_dir = None
 
 
 
-class texture_seg_dataset(object):
+class base_dataset(object):
     def __init__(self, data_path, img_size, segmentation_regions, texture_size,
                         shuffle = True, use_same_from = True,
                         mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]): # from torch normalize
@@ -155,11 +156,13 @@ class texture_seg_dataset(object):
             file_cur = random.choice(files)
             # print (file_cur)
             img_cur = Image.open(file_cur)
-            img_cur = img_cur.resize([self.img_size, self.img_size])
             img_cur = (np.asarray(img_cur) / 255.0 - self.mean) / self.std
+            img_cur = np.asarray(img_cur)
+            img_cur_original = img_cur[...]
+            img_cur = cv2.resize(img_cur, (self.img_size, self.img_size))
             img[mask[..., index] == 1] = img_cur[mask[..., index] == 1]
             if self.use_same_from:
-                texture_cur = img_cur
+                texture_cur = img_cur_original
             else:
                 file_cur = random.choice(files)
                 texture_cur = np.asarray(Image.open(file_cur))
@@ -167,6 +170,7 @@ class texture_seg_dataset(object):
             texture_mask.append({'mask': mask[...,index], 'texture':texture})
         return img, texture_mask
 
+class texture_seg_dataset(base_dataset):
 
     def feed(self, batch_size = None):
         if batch_size is None:
@@ -208,13 +212,64 @@ class texture_seg_dataset(object):
             masks = np.transpose(masks, [0, 3, 1, 2])
             return imgs, textures, masks
 
+class concat_seg_dataset(base_dataset):
+    def feed(self, batch_size = None):
+        if batch_size is None:
+            return self.get_data()
+        else:
+            img_texture_mask = []
+            # add each one separatly
+            for _ in range(batch_size):
+                img, texture_mask = self.get_data()
+                # random choice one from cluster
+                index = np.random.choice(self.segmentation_regions, 1)[0]
+                patch = {}
+                patch['concat_input'] = np.concatenate([img, texture_mask[index]['texture']], axis = -1)
+                patch['mask'] = texture_mask[index]['mask']
+                img_texture_mask.append(patch)
+
+            img_texture_mask = img_texture_mask[:batch_size]
+            if self.shuffle:
+                random.shuffle(img_texture_mask)
+                concat_inputs = [item['concat_input'] for item in img_texture_mask]
+                masks = [item['mask'] for item in img_texture_mask]
+            concat_inputs = np.array(concat_inputs).reshape([batch_size, self.img_size, self.img_size, 6])
+            masks = np.array(masks).reshape([batch_size, self.img_size, self.img_size, 1])
+            concat_inputs = np.transpose(concat_inputs, [0, 3, 1, 2])
+            masks = np.transpose(masks, [0, 3, 1, 2])
+            return concat_inputs, masks
+
+
 if __name__ == '__main__':
-    data_set = texture_seg_dataset('./dataset/dtd/images', img_size = 256, segmentation_regions= 3, texture_size = 64)
-    imgs, textures, masks = data_set.feed(batch_size = 2)
-    print ('img shape: ', imgs.shape)
-    print ('texture shape: ', textures.shape )
+    data_set = concat_seg_dataset('./images', img_size = 128, segmentation_regions= 3, texture_size = 128)
+    concat_inputs, masks = data_set.feed_concat(batch_size = 2)
+    print ('concat_inputs: ', concat_inputs.shape)
     print ('masks shape: ', masks.shape)
-    raise
+    concat_inputs = concat_inputs[0]
+    img1 = concat_inputs[:3,...]
+    img2 = concat_inputs[3:,...]
+    img1 = np.transpose(img1, [1,2,0])
+    img2 = np.transpose(img2, [1,2,0])
+    cv2.imwrite('img1.png', img1)
+    cv2.imwrite('img2.png', img2)
+    cv2.imwrite('mask.png', 255.0 * np.transpose(masks[0], [1,2,0]))
+
+    # mask = masks[0,...]
+    # concat_0 = concat_inputs[0, :3, ...]
+    # concat_1 = concat_inputs[0, 3:, ...]
+    # mask = np.transpose(mask, [1,2,0])
+    # concat_0 = np.transpose(concat_0, [1,2,0])
+    # concat_1 = np.transpose(concat_1, [1,2,0])
+    #
+    # concat_0 = cv2.cvtColor(np.uint8(concat_0), cv2.COLOR_BGR2RGB)
+    # concat_1 = cv2.cvtColor(np.uint8(concat_1), cv2.COLOR_BGR2RGB)
+    #
+    # cv2.imwrite('mask.png', mask*255)
+    # cv2.imwrite('concat_0.png', concat_0)
+    # cv2.imwrite('concat_1.png', concat_1)
+    #
+    # raise
+    data_set = texture_seg_dataset('./images', img_size = 128, segmentation_regions= 3, texture_size = 128)
     img, texture_mask = data_set.get_data()
     print (img.shape)
     print (len(texture_mask))

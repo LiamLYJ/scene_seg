@@ -3,11 +3,11 @@ import torch.nn as nn
 import torchvision
 import torchvision.models as models
 import torch.nn.functional as nn_F
-from fcn_net import *
+from lite_net import *
 import numpy as np
 import argparse
 from data_loader import texture_seg_dataset, get_data_direct
-from utils import load_fcn_model, remap2normal, normal_masks
+from utils import load_model_prefix, remap2normal, normal_masks
 import os
 import cv2
 
@@ -87,13 +87,15 @@ def load_direct(args):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')
 
-    vgg_model = VGGNet(requires_grad=True).to(device)
-    fcn_model = FCNs(pretrained_net=vgg_model, n_class=n_class).to(device)
-    fcn_model, iter_old = load_fcn_model(model_dir, fcn_model)
+    net_model = lite_net().to(device)
+    try:
+        net_model, iter_old = load_model_prefix(model_dir, net_model, prefix = 'concat')
+        print ('load model from %d iteration'%(iter_old))
+    except:
+        raise ValueError('something wrong when loading pre-trained model')
 
-    print ('load model from %d iter'%(iter_old))
-
-    all_imgs, all_textures = get_data_direct(img_size = args.img_size, imgs_dir = args.imgs_dir,)
+    all_imgs, all_textures = get_data_direct(img_size = args.img_size, imgs_dir = args.imgs_dir,
+                                                texture_size = args.img_size, textures_dir = args.textures_dir)
     all_batch_size = all_imgs.shape[0]
     print ('all batch_size is:', all_batch_size)
     iter_num = all_batch_size // batch_size
@@ -103,10 +105,12 @@ def load_direct(args):
 
     for iter in range(iter_num):
         imgs = all_imgs[iter*batch_size:(iter+1)*batch_size, ...]
+        textures = all_textures[iter*batch_size:(iter+1)*batch_size, ...]
         imgs = torch.from_numpy(imgs)
-        imgs = imgs.type(torch.FloatTensor).to(device)
-
-        output_masks = fcn_model(imgs).to(device)
+        textures = torch.from_numpy(textures)
+        input = torch.cat([imgs, textures], dim = 1)
+        input = input.type(torch.FloatTensor).to(device)
+        output_masks = net_model(input).to(device)
 
         print ('output_masks: ', output_masks.shape)
         print ('img shape: ', imgs.shape)
@@ -116,26 +120,26 @@ def load_direct(args):
 
         for index in range(batch_size):
             torchvision.utils.save_image(imgs[index], os.path.join(save_dir, 'input_img_%d_%02d.png'%(iter, index)))
-            for mask_index in range(n_class):
-                torchvision.utils.save_image(output_masks[index,mask_index,...], os.path.join(save_dir, 'output_%d_mask%d_%02d.png'%(iter, mask_index,index)))
+            torchvision.utils.save_image(output_masks[index,...], os.path.join(save_dir, 'output_%d_%02d.png'%(iter,index)))
 
 
 if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='./models/fcn_scene_model' , help='path for saving trained models')
+    parser.add_argument('--model_dir', type=str, default='./models/lite_scene_model' , help='path for saving trained models')
     parser.add_argument('--image_dir', type=str, default='./dataset/dtd/images', help='directory for images from')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
     parser.add_argument('--use_same_from', type=bool, default=True, help = 'if use the same texture from that same')
-    parser.add_argument('--save_dir', type=str, default='./fcn_real_test', help='directory for saving ')
+    parser.add_argument('--save_dir', type=str, default='./tmp_test', help='directory for saving ')
 
     # Model parameters
     parser.add_argument('--img_size', type=int , default=256, help='input image size')
     parser.add_argument('--segmentation_regions', type=int , default=4, help='number of segmentation_regions')
 
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=1)
 
     parser.add_argument('--imgs_dir', type=str, default='./imgs_dir', help='directory for images from')
+    parser.add_argument('--textures_dir', type=str, default='./textures_dir', help='directory for images from')
 
     args = parser.parse_args()
 

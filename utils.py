@@ -20,8 +20,8 @@ def normal_masks(input):
 def remap2normal(img, mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]):
     # img is b*3*h*w
     batch_size = img.shape[0]
-    batch_mean = torch.Tensor(mean).repeat(batch_size).view(-1, 3, 1, 1)
-    batch_std = torch.Tensor(std).repeat(batch_size).view(-1, 3, 1, 1)
+    batch_mean = torch.Tensor(mean).repeat(batch_size).view(-1, 3, 1, 1).type(torch.DoubleTensor)
+    batch_std = torch.Tensor(std).repeat(batch_size).view(-1, 3, 1, 1).type(torch.DoubleTensor)
     return img * batch_std + batch_mean
 
 def fit_tfb(img):
@@ -75,7 +75,10 @@ def load_model_prefix(model_dir, model, prefix = 'fcn'):
     model_found = glob.glob(os.path.join(model_dir, prefix+'*'))
     model_ = sorted(model_found)[-1]
     iter_old = re.findall('\d+', model_)[0]
-    model.load_state_dict(torch.load(model_))
+    try:
+        model.load_state_dict(torch.load(model_))
+    except:
+        model.load_state_dict(torch.load(model_,map_location=lambda storage, loc: storage))
     return model, int(iter_old)
 
 def get_weighted(y):

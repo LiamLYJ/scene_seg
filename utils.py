@@ -60,10 +60,11 @@ def load_model(model_dir, model_encoder, model_decoder):
 
 
 # load / save model of prefix
-def save_model_prefix(model_dir, iter, model, prefix = 'fcn', inter_size = None):
+def save_model_prefix(model_dir, iter, model, prefix = 'fcn', inter_size = 0):
     torch.save(model.state_dict(), os.path.join(
         model_dir, '%s_%08d.ckpt'%(prefix, iter)))
-    if not inter_size is None:
+    print ('saved model once')
+    if inter_size > 0:
         model_ = glob.glob(os.path.join(model_dir, prefix+'*'))
         model_ = sorted(model_)
         remove_count = len(model_) - inter_size

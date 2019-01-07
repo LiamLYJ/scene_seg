@@ -26,7 +26,9 @@ def main(args):
     # device = torch.device('cpu')
     writer = SummaryWriter(args.log_dir)
 
-    data_set = concat_seg_dataset(args.image_dir, img_size = args.img_size, segmentation_regions= 4, texture_size=args.texture_size)
+    data_set = concat_seg_dataset(args.image_dir, img_size = args.img_size,
+                                segmentation_regions= 4, texture_size=args.texture_size,
+                                use_same_from = args.use_same_from)
 
     net_model = lite_net().to(device)
 
@@ -84,25 +86,28 @@ if __name__ == '__main__':
     # path
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', type=str, default='./models/lite_scene_model' , help='path for saving trained models')
-    parser.add_argument('--image_dir', type=str, default='./images', help='directory for images from')
+    parser.add_argument('--image_dir', type=str, default='./dataset/scene_images', help='directory for images from')
     parser.add_argument('--log_dir', type=str, default='./logs/lite_scene/' , help='path for saving tensorboard')
     parser.add_argument('--log_step', type=int , default=2, help='step size for prining log info')
     parser.add_argument('--save_step', type=int , default=1000, help='step size for saving trained models')
-    parser.add_argument('--save_inter_size', type=int , default=2, help='how many to keep for saving')
+    parser.add_argument('--save_inter_size', type=int , default=0, help='how many to keep for saving')
     parser.add_argument('--mode', type=str, default=None, help = 'mode to use ')
 
     # Model parameters
     parser.add_argument('--img_size', type=int , default=128, help='input image size')
     parser.add_argument('--texture_size', type=int , default=128, help='input texture size')
     parser.add_argument('--segmentation_regions', type=int , default=4, help='number of segmentation_regions')
+    parser.add_argument('--use_same_from', type=str, default='True', help = 'if use the same texture from that same')
 
     parser.add_argument('--total_iter', type=int, default=9999999)
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--loss_weight', type=float, default=1.0)
     parser.add_argument('--loss_type', type=str, default= 'seg_loss', help='seg_loss or rms_loss')
 
     args = parser.parse_args()
+
+    args.use_same_from = True if args.use_same_from in ['True', 1, 'TRUE', 'true'] else False
 
     if not os.path.exists(args.model_dir):
         os.makedirs(args.model_dir)

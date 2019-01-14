@@ -10,6 +10,7 @@ from data_loader import texture_seg_dataset, get_data_direct
 from utils import seg_loss, load_model, remap2normal, normal_masks
 import os
 import cv2
+import time
 
 def main(args):
     batch_size = args.batch_size
@@ -114,6 +115,8 @@ def load_direct(args):
         imgs = imgs.type(torch.FloatTensor).to(device)
         textures = textures.type(torch.FloatTensor).to(device)
 
+        start = time.time()
+
         encoder_img, vgg_features = model_encoder(imgs)
         encoder_texture, _ = model_encoder(textures)
 
@@ -127,8 +130,12 @@ def load_direct(args):
             padding = (filt_stride - 1) * t0.shape[-1] - filt_stride + filt.shape[-1]
             padding = int(padding / 2)
             correlations.append(nn_F.conv2d(t0.unsqueeze(0), t1.unsqueeze(0), stride = filt_stride, padding = padding))
-        correlations = torch.cat(correlations, 0)
+        correlations = torch.cat(correlations, 0).to(device)
         output_masks, _ = model_decoder(correlations, vgg_features)
+
+        end = time.time()
+        print ('run for one frame (sec):', (end - start))
+
         print ('output_masks: ', output_masks.shape)
         print ('img shape: ', imgs.shape)
 
@@ -161,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--segmentation_regions', type=int , default=3, help='number of segmentation_regions')
     parser.add_argument('--texture_size', type=int , default=64, help='texture input size')
 
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=1)
 
     parser.add_argument('--imgs_dir', type=str, default='./imgs_dir', help='directory for images from')
     parser.add_argument('--textures_dir', type=str, default='./textures_dir', help='directory for textures from')

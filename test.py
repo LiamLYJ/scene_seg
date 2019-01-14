@@ -10,6 +10,7 @@ from data_loader import texture_seg_dataset, get_data_direct
 from utils import load_model_prefix, remap2normal, normal_masks
 import os
 import cv2
+import time
 
 def main(args):
     batch_size = args.batch_size
@@ -110,7 +111,10 @@ def load_direct(args):
         textures = torch.from_numpy(textures)
         input = torch.cat([imgs, textures], dim = 1)
         input = input.type(torch.FloatTensor).to(device)
+        start = time.time()
         output_masks = net_model(input).to(device)
+        end = time.time()
+        print ('run one frame (sec):', (end-start))
 
         print ('output_masks: ', output_masks.shape)
         print ('img shape: ', imgs.shape)
